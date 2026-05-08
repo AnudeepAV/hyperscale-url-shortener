@@ -1,47 +1,55 @@
 """Application configuration using Pydantic Settings."""
-from typing import List
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Centralized config — loaded from .env. Single source of truth."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
-    )
+    """Application settings."""
 
     # App
     APP_NAME: str = "HyperScale"
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
+    
+    # Security
     SECRET_KEY: str
-    API_V1_PREFIX: str = "/api/v1"
-    BASE_URL: str = "http://localhost:8000"
-
-    # DB
-    DATABASE_URL: str
-    SYNC_DATABASE_URL: str
-
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
-
-    # JWT
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
-    # Rate Limiting
+    
+    # API
+    API_V1_PREFIX: str = "/api/v1"
+    BASE_URL: str = "http://localhost:8000"
+    SHORT_URL_DOMAIN: str = "http://localhost:8000"
+    
+    # Database
+    DATABASE_URL: str
+    SYNC_DATABASE_URL: str
+    
+    # Redis
+    REDIS_URL: str
+    
+    # Celery
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+    
+    # CORS - Accept comma-separated string
+    CORS_ORIGINS: str = "http://localhost:3000"
+    
+    # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 100
     RATE_LIMIT_PER_HOUR: int = 1000
-
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]
-
-    # Shortener
+    
+    # URL shortening
     SHORT_URL_LENGTH: int = 7
-    SHORT_URL_DOMAIN: str = "http://localhost:8000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
 
 
 settings = Settings()
