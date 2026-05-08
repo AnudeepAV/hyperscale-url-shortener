@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
     
-    # CORS - Simple list (no property needed)
+    # CORS - List of allowed origins
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "https://hyperscale-url-shortener.vercel.app"

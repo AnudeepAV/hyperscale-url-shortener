@@ -49,15 +49,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS Middleware - MUST be added before other middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # Just use directly as list
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
- 
 
 
 @app.middleware("http")
