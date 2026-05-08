@@ -32,8 +32,11 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
     
-    # CORS - Accept comma-separated string
-    CORS_ORIGINS: str = "http://localhost:3000"
+    # CORS - Simple list (no property needed)
+    CORS_ORIGINS: list = [
+        "http://localhost:3000",
+        "https://hyperscale-url-shortener.vercel.app"
+    ]
     
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 100
@@ -41,11 +44,6 @@ class Settings(BaseSettings):
     
     # URL shortening
     SHORT_URL_LENGTH: int = 7
-
-    @property
-    def cors_origins_list(self) -> list[str]:
-        """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
     class Config:
         env_file = ".env"
