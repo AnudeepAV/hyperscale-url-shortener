@@ -49,10 +49,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware - MUST be added before other middleware
+# ===== CRITICAL: CORS MIDDLEWARE MUST BE FIRST =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
