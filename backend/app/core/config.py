@@ -33,10 +33,13 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str
     
     # CORS - List of allowed origins
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "https://hyperscale-url-shortener.vercel.app"
-    ]
+    # CORS - Hardcoded for production
+CORS_ORIGINS: list = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://hyperscale-url-shortener.vercel.app",
+    "*"  # Allow all origins for now (temporary fix)
+]
     
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 100
