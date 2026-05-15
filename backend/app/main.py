@@ -66,7 +66,7 @@ async def metrics_middleware(request, call_next):
         response = await call_next(request)
     except Exception as e:
         logger.error(f"middleware_error: {str(e)}")
-        return Response(f"ERROR: {type(e).__name__}: {str(e)}", status_code=500)
+        return Response("Internal Server Error", status_code=500)
     
     duration = time.time() - start
     endpoint = request.url.path
