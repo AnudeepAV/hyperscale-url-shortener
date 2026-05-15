@@ -1,15 +1,13 @@
 """
 HyperScale — main FastAPI app.
-
-Wires together: routers, middleware, lifespan events, observability.
 """
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import time
+import sys
 
 from app.api import auth, urls, redirect, websocket
 from app.core.config import settings
@@ -29,11 +27,15 @@ REQUEST_LATENCY = Histogram(
 async def lifespan(app: FastAPI):
     setup_logging(debug=settings.DEBUG)
     logger.info("startup", env=settings.APP_ENV)
-
-    # Auto-create tables in dev. Use Alembic for prod.
-    if settings.APP_ENV == "development":
+    
+    # Auto-create tables
+    try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        logger.info("database_ready")
+    except Exception as e:
+        logger.error(f"database_init_failed: {str(e)}")
+        sys.exit(1)
 
     yield
     logger.info("shutdown")
@@ -49,20 +51,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ===== CRITICAL: CORS MIDDLEWARE MUST BE FIRST =====
+# ===== CORS MIDDLEWARE - MUST BE FIRST AND ALLOW ALL =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],  # Allow ALL origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
 @app.middleware("http")
 async def metrics_middleware(request, call_next):
     start = time.time()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        logger.error(f"middleware_error: {str(e)}")
+        return Response("Internal Server Error", status_code=500)
+    
     duration = time.time() - start
     endpoint = request.url.path
     REQUEST_COUNT.labels(request.method, endpoint, response.status_code).inc()
@@ -74,7 +82,7 @@ async def metrics_middleware(request, call_next):
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(urls.router, prefix=settings.API_V1_PREFIX)
 
-# Redirect (no prefix — needs to live at root for short URLs)
+# Redirect (no prefix)
 app.include_router(redirect.router)
 
 # WebSocket
