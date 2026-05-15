@@ -7,12 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import time
-import sys
 
 from app.api import auth, urls, redirect, websocket
 from app.core.config import settings
 from app.core.logging import logger, setup_logging
-from app.db.session import Base, engine
+from app.db.session import engine
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -25,19 +24,16 @@ REQUEST_LATENCY = Histogram(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifespan events."""
     setup_logging(debug=settings.DEBUG)
     logger.info("startup", env=settings.APP_ENV)
     
-    # Auto-create tables
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("database_ready")
-    except Exception as e:
-        logger.error(f"database_init_failed: {str(e)}")
-        sys.exit(1)
+    # Tables should be created via Supabase SQL or Alembic migrations
+    # Don't create tables on startup to avoid connection issues
+    logger.info("application_ready")
 
     yield
+    
     logger.info("shutdown")
     await engine.dispose()
 
@@ -64,6 +60,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def metrics_middleware(request, call_next):
+    """Track request metrics."""
     start = time.time()
     try:
         response = await call_next(request)
@@ -78,27 +75,30 @@ async def metrics_middleware(request, call_next):
     return response
 
 
-# API routes (prefixed)
+# API routes (prefixed with /api/v1)
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(urls.router, prefix=settings.API_V1_PREFIX)
 
-# Redirect (no prefix)
+# Redirect (no prefix — lives at root for short URLs)
 app.include_router(redirect.router)
 
-# WebSocket
+# WebSocket (real-time updates)
 app.include_router(websocket.router)
 
 
 @app.get("/health", tags=["health"])
 async def health():
+    """Health check endpoint."""
     return {"status": "ok", "service": settings.APP_NAME, "env": settings.APP_ENV}
 
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
+    """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/", include_in_schema=False)
 async def root():
+    """Root endpoint."""
     return {"message": "HyperScale API", "docs": "/docs"}
