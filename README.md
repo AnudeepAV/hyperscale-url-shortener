@@ -1,57 +1,52 @@
-# 🚀 HyperScale — Production-Grade URL Shortener with Real-Time Analytics
+# HyperScale — Distributed URL Shortener
 
-> Sub-50ms redirects. Live click streams over WebSocket. Built with the same patterns that power Bitly, TinyURL, and Twitter at scale.
+A production-style URL shortener with user accounts, custom short links, click
+analytics, and a queue-decoupled architecture. Built to demonstrate backend
+system design: async APIs, cache-aside reads, queue-decoupled writes, JWT auth,
+and containerized deployment.
 
 [![CI/CD Pipeline](https://github.com/AnudeepAV/hyperscale-url-shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/AnudeepAV/hyperscale-url-shortener/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-black.svg)](https://nextjs.org/)
 
-**Live Demo:** [hyperscale.vercel.app](https://hyperscale.vercel.app) (after deployment)
-**API Docs:** [hyperscale-api.onrender.com/docs](https://hyperscale-api.onrender.com/docs)
+**Live demo**
+- Frontend: https://hyperscale-url-shortener.vercel.app
+- API docs (Swagger): https://hyperscale-api.onrender.com/docs
 
----
-
-## 📊 Performance Highlights
-
-| Metric | Target | Achieved |
-|---|---|---|
-| Redirect latency (p50) | < 10ms | ~5ms |
-| Redirect latency (p99) | < 50ms | ~38ms |
-| Cache hit ratio | > 95% | 97.2% |
-| Throughput | 10K+ RPS | 12.4K RPS (single instance) |
-| Background queue processing | < 1s | ~200ms |
-
-*Measured locally with `wrk` against Docker stack on M1 Pro.*
+> The hosted demo runs on free-tier infrastructure. The first request after a
+> period of inactivity may take ~30–50s while the backend cold-starts.
 
 ---
 
-## ✨ What This Project Demonstrates
+## What this project demonstrates
 
-This is **not a CRUD app**. It's a deliberate showcase of distributed systems patterns asked in FAANG interviews:
+A deliberate showcase of backend system design patterns, not a basic CRUD app:
 
-- **🔥 Hot path optimization** — Cache-aside pattern with Redis. Redirects never block on DB writes.
-- **⚡ Async event processing** — Celery + Redis pub/sub. Click events are fire-and-forget from the redirect path.
-- **📡 Real-time updates** — WebSocket subscribers get pushed click events via Redis pub/sub the instant they happen.
-- **🛡️ Production security** — JWT + refresh tokens, OWASP-style input validation, token-bucket rate limiting.
-- **📊 Observability** — Structured JSON logs (parseable by Datadog/ELK) + Prometheus metrics endpoint.
-- **🐳 Containerized** — Multi-stage Docker builds, non-root users, Docker Compose for local dev.
-- **🤖 Automated** — GitHub Actions CI/CD with PostgreSQL + Redis service containers.
-- **🎨 Premium UI** — Glass morphism, Framer Motion animations, live-streaming dashboards.
+- **Hot-path optimization** — redirects are served via a Redis cache-aside
+  layer, falling back to PostgreSQL only on a cache miss.
+- **Queue-decoupled writes** — click events are enqueued to Celery rather than
+  written inline, so the redirect response never blocks on analytics work.
+- **Real-time capability** — a WebSocket endpoint streams click events to
+  subscribers via Redis pub/sub.
+- **Security** — JWT authentication with access and refresh tokens, input
+  validation, and rate limiting.
+- **Observability** — structured JSON logging and a Prometheus metrics endpoint.
+- **Containerized** — multi-stage Docker builds running as a non-root user;
+  one-command local startup with Docker Compose.
+- **CI** — GitHub Actions pipeline with PostgreSQL and Redis service containers.
 
 ---
 
-## 🏗️ Architecture
-
-```
+## Architecture
 ┌─────────────────┐
-│   Next.js UI    │  ← Vercel (free)
+│   Next.js UI    │  ← Vercel
 │  + WebSockets   │
 └────────┬────────┘
-         │ HTTPS / WSS
-         ▼
+│ HTTPS / WSS
+▼
 ┌─────────────────────────────────────────────┐
-│         FastAPI Backend  (Render free)       │
+│         FastAPI Backend  (Render)            │
 │  ┌──────────┐  ┌──────────┐  ┌────────────┐ │
 │  │  Auth    │  │  URLs    │  │ Redirect   │ │
 │  │  (JWT)   │  │ (CRUD)   │  │ (hot path) │ │
@@ -61,85 +56,96 @@ This is **not a CRUD app**. It's a deliberate showcase of distributed systems pa
 │  │   WebSocket /ws/clicks/:c    │  │        │
 │  └──────────────┬───────────────┘  │        │
 └─────────────────┼──────────────────┼────────┘
-                  │                  │
-                  │ Pub/Sub          │ Enqueue
-                  ▼                  ▼
-         ┌────────────────┐  ┌──────────────┐
-         │      Redis     │  │    Celery    │
-         │ (Upstash free) │◄─│    Worker    │
-         │  Cache+Queue   │  │ (writes hits)│
-         └────────────────┘  └──────┬───────┘
-                                    │
-                                    ▼
-                            ┌───────────────┐
-                            │  PostgreSQL   │
-                            │ (Supabase)    │
-                            └───────────────┘
-```
+│                  │
+│ Pub/Sub          │ Enqueue
+▼                  ▼
+┌────────────────┐  ┌──────────────┐
+│      Redis     │  │    Celery    │
+│   (Upstash)    │◄─│    Worker    │
+│  Cache + Queue │  │ (writes hits)│
+└────────────────┘  └──────┬───────┘
+│
+▼
+┌───────────────┐
+│  PostgreSQL   │
+│  (Supabase)   │
+└───────────────┘
+**Design rationale**
+- Redirects are read-heavy and latency-sensitive → cache-aside with Redis.
+- Click writes are write-heavy and tolerate eventual consistency → async via Celery.
+- Live dashboards need pushed updates → Redis pub/sub + WebSockets.
+- Services are decoupled → API and workers can scale independently.
 
-**Why this design?**
-- **Redirects are read-heavy and latency-sensitive** → cache-aside with Redis
-- **Click writes are write-heavy but eventually consistent** → async via Celery
-- **Live dashboards need pushed updates** → Redis pub/sub + WebSockets
-- **Decoupled services** → can scale workers and API independently
+PostgreSQL is the source of truth. Redis serves hot reads and acts as the
+Celery broker.
+
+> **Note on the hosted demo:** the Celery worker is not deployed in the hosted
+> free-tier environment. In the hosted demo, click events are therefore
+> enqueued but not consumed, so the demo's click counter does not increment.
+> The full pipeline — redirect → enqueue → worker consumes → count updates —
+> has been verified running locally via Docker Compose, which starts the
+> worker. This is a deployment trade-off, not a design gap: the redirect path
+> is intentionally decoupled from analytics processing.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech stack
 
 ### Backend
 - **FastAPI** (Python 3.12) — async-first, auto-generated OpenAPI docs
-- **SQLAlchemy 2.0** + **asyncpg** — modern typed ORM with native async
+- **SQLAlchemy 2.0** + **asyncpg** — typed ORM with native async
 - **Pydantic v2** — request/response validation
-- **PostgreSQL 16** — primary data store, indexed for hot queries
-- **Redis 7** — cache + queue broker + pub/sub
+- **PostgreSQL** — primary data store, indexed for hot queries
+- **Redis** — cache, queue broker, and pub/sub
 - **Celery** — distributed task queue
 - **structlog** — JSON-formatted structured logging
 - **Prometheus client** — metrics export
 
 ### Frontend
-- **Next.js 14** (App Router) + **TypeScript**
+- **Next.js** (App Router) + **TypeScript**
 - **Tailwind CSS** + custom design tokens
-- **Framer Motion** — production-grade animations
 - **Recharts** — analytics visualization
 - **Zustand** — lightweight state management
-- **react-hot-toast** — notifications
 
 ### Infrastructure
-- **Docker** + **Docker Compose** — local dev parity with prod
-- **GitHub Actions** — CI/CD with service containers
-- **Render** (backend) + **Vercel** (frontend) + **Supabase** (DB) + **Upstash** (Redis) — 100% free tier
+- **Docker** + **Docker Compose** — local dev parity with production
+- **GitHub Actions** — CI with service containers
+- **Render** (backend), **Vercel** (frontend), **Supabase** (PostgreSQL),
+  **Upstash** (Redis) — all free tier
 
 ---
 
-## 🚀 Quickstart (Local Development)
+## Performance
 
-### Prerequisites
-- Docker Desktop
-- VS Code (with recommended extensions — see `.vscode/extensions.json`)
-- Git
+Performance baselines have not yet been formally established. Load testing to
+measure redirect latency, throughput, and cache hit ratio is planned — see
+[Roadmap](#roadmap).
 
-### Run the entire stack with one command
+---
+
+## Running locally
+
+Requires Docker Desktop.
 
 ```bash
-# Clone
 git clone https://github.com/AnudeepAV/hyperscale-url-shortener.git
 cd hyperscale-url-shortener
 
-# Configure backend env
-cp backend/.env.example backend/.env
+cp backend/.env.example backend/.env   # then fill in values
 
-# Start everything
 docker-compose up --build
 ```
 
-That's it. Open:
-- 🎨 Frontend: http://localhost:3000
-- 🔌 API docs: http://localhost:8000/docs
-- 📊 Metrics: http://localhost:8000/metrics
-- ❤️ Health: http://localhost:8000/health
+Open:
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/docs
+- Metrics: http://localhost:8000/metrics
+- Health: http://localhost:8000/health
 
-### Run without Docker (for active development)
+Running locally starts the Celery worker, so the click analytics pipeline works
+end to end.
+
+### Running without Docker
 
 **Backend:**
 ```bash
@@ -148,7 +154,6 @@ python -m venv venv
 source venv/bin/activate         # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# (start your own postgres + redis, or just `docker-compose up db redis`)
 uvicorn app.main:app --reload
 ```
 
@@ -169,9 +174,7 @@ npm run dev
 
 ---
 
-## 📁 Project Structure
-
-```
+## Project structure
 hyperscale-url-shortener/
 ├── backend/
 │   ├── app/
@@ -199,7 +202,7 @@ hyperscale-url-shortener/
 │   │   │   ├── login/
 │   │   │   ├── register/
 │   │   │   └── dashboard/
-│   │   │       └── [shortCode]/  # Live analytics
+│   │   │       └── [shortCode]/  # Analytics view
 │   │   ├── components/       # Reusable UI
 │   │   ├── hooks/            # useLiveClicks (WebSocket)
 │   │   └── lib/              # API client, auth store
@@ -207,52 +210,34 @@ hyperscale-url-shortener/
 │   └── package.json
 ├── .github/workflows/
 │   └── ci.yml                # GitHub Actions pipeline
-├── .vscode/                  # VS Code workspace config
-├── docs/
-│   └── HyperScale_Project_Documentation.pdf
 ├── docker-compose.yml
 └── README.md
-```
-
 ---
 
-## 📡 API Reference
+## API reference
 
 ### Auth
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/auth/register` | Create account |
-| POST | `/api/v1/auth/login` | Get JWT pair |
+| POST | `/api/v1/auth/login` | Obtain JWT pair |
 | POST | `/api/v1/auth/refresh` | Refresh access token |
 
 ### URLs
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | POST | `/api/v1/urls` | optional | Shorten a URL |
-| GET | `/api/v1/urls` | required | List my URLs |
-| DELETE | `/api/v1/urls/:id` | required | Delete URL |
+| GET | `/api/v1/urls` | required | List the user's URLs |
+| DELETE | `/api/v1/urls/:id` | required | Delete a URL |
 | GET | `/api/v1/urls/:code/analytics` | required | Aggregated analytics |
-| GET | `/:code` | none | **Redirect** (hot path) |
+| GET | `/:code` | none | Redirect (hot path) |
 | WS | `/ws/clicks/:code` | none | Live click stream |
 
-Full Swagger docs at `/docs`.
+Full interactive docs at `/docs`.
 
 ---
 
-## 🌍 Deployment (100% Free)
-
-### One-time setup
-
-1. **PostgreSQL** → [supabase.com](https://supabase.com) → Create project → Settings → Database → copy connection string
-2. **Redis** → [upstash.com](https://upstash.com) → Create database → copy `redis://...` URL
-3. **Backend** → [render.com](https://render.com) → New Web Service → connect repo → Runtime: Docker → Root: `backend/` → set env vars
-4. **Frontend** → [vercel.com](https://vercel.com) → Import GitHub repo → Root: `frontend/` → set `NEXT_PUBLIC_API_URL` → Deploy
-
-Detailed deployment guide in [`docs/HyperScale_Project_Documentation.pdf`](docs/HyperScale_Project_Documentation.pdf).
-
----
-
-## 🧪 Testing
+## Testing
 
 ```bash
 # Backend
@@ -266,30 +251,35 @@ npm run type-check
 
 ---
 
-## 📈 Roadmap (post-MVP)
+## Screenshots
 
-- [ ] Geo-IP enrichment (MaxMind free tier)
+<!-- Add images to a /screenshots folder and reference them here -->
+![Landing page](screenshots/landing.png)
+![Dashboard](screenshots/dashboard.png)
+![Create link](screenshots/create-link.png)
+
+---
+
+## Roadmap
+
+- [ ] Load testing (k6 / wrk) to establish real latency and throughput baselines
+- [ ] Deploy the Celery worker so hosted analytics run end to end
+- [ ] Alembic migrations (schema currently created via SQL)
+- [ ] Geo-IP enrichment for click analytics
 - [ ] QR code generation per short link
 - [ ] Custom domain support (vanity URLs)
-- [ ] Bulk import from CSV
-- [ ] Team workspaces with RBAC
-- [ ] Kafka migration for click ingestion at very high scale
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **Anudeep Munagala**
-- 💼 LinkedIn: [linkedin.com/in/anudeep-munagala](https://linkedin.com/in/anudeep-munagala)
-- 🐙 GitHub: [github.com/AnudeepAV](https://github.com/AnudeepAV)
-- 📧 munagalaanudeep2002@gmail.com
+- LinkedIn: [linkedin.com/in/anudeep-munagala](https://linkedin.com/in/anudeep-munagala)
+- GitHub: [github.com/AnudeepAV](https://github.com/AnudeepAV)
+- Email: munagalaanudeep2002@gmail.com
 
 ---
 
-## 📄 License
+## License
 
 MIT — see [LICENSE](LICENSE)
-
----
-
-⭐ **If this project helped you understand distributed systems, please star the repo!**
