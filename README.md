@@ -257,6 +257,7 @@ npm run type-check
 ![Landing page](screenshots/landing.png)
 ![Dashboard](screenshots/dashboard.png)
 ![Create link](screenshots/create-link.png)
+![API docs](screenshots/api-docs.png)
 
 ---
 
