@@ -39,6 +39,7 @@ A deliberate showcase of backend system design patterns, not a basic CRUD app:
 ---
 
 ## Architecture
+'''
 ┌─────────────────┐
 │   Next.js UI    │  ← Vercel
 │  + WebSockets   │
@@ -70,6 +71,7 @@ A deliberate showcase of backend system design patterns, not a basic CRUD app:
 │  PostgreSQL   │
 │  (Supabase)   │
 └───────────────┘
+'''
 **Design rationale**
 - Redirects are read-heavy and latency-sensitive → cache-aside with Redis.
 - Click writes are write-heavy and tolerate eventual consistency → async via Celery.
@@ -175,6 +177,7 @@ npm run dev
 ---
 
 ## Project structure
+'''
 hyperscale-url-shortener/
 ├── backend/
 │   ├── app/
@@ -212,6 +215,7 @@ hyperscale-url-shortener/
 │   └── ci.yml                # GitHub Actions pipeline
 ├── docker-compose.yml
 └── README.md
+'''
 ---
 
 ## API reference
